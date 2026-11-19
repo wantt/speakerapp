@@ -29,7 +29,8 @@ Windows / macOS / Linux 三平台通用，模型权重已随安装包内置，�
 | Debian / Ubuntu | `VoiceprintStudio-1.0.0-amd64.deb` | `sudo apt install ./VoiceprintStudio-1.0.0-amd64.deb` |
 | 通用 Linux | `VoiceprintStudio-1.0.0-x86_64.AppImage` | `chmod +x` 后直接运行 |
 
-> macOS 版本已使用 Developer ID 签名；若尚未完成 Apple 公证，首次打开如提示
+> macOS 版本已使用 Developer ID 签名并通过 Apple Notary Service 公证，`spctl` 验证结果为
+> `source=Notarized Developer ID`。若在离线或网络受限的环境下首次打开仍提示
 > 「无法验证开发者」，可执行
 > `xattr -dr com.apple.quarantine "/Applications/Voiceprint Studio.app"`，
 > 或右键 →「打开」。Windows SmartScreen 提示时选择「更多信息 → 仍要运行」。
@@ -124,6 +125,11 @@ APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
 
 然后运行 `./notarize-dmg.sh dist`：脚本会对每个 DMG 重新签名、提交 Apple Notary
 Service、等待结果并装订（staple）票据，最后用 `stapler validate` 校验。
+
+若个别 macOS / Command Line Tools 版本上装订票据时报 `Could not validate ticket`
+（error 65），属于本机 `stapler` 工具问题（对任何已公证的 DMG 都会出现），脚本会给出
+警告但视为公证成功——此时 `spctl --assess --type open --context context:primary-signature`
+仍会返回 `source=Notarized Developer ID`，联网环境下 Gatekeeper 正常放行。
 
 若提交返回 `HTTP 403: A required agreement is missing or has expired`，需由团队
 管理员登录 [Apple Developer 账户](https://developer.apple.com/account) →

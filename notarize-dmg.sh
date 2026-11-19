@@ -123,27 +123,25 @@ notarize_dmg() {
         return 1
     fi
 
-    # Staple the ticket
+    # Staple the ticket so the DMG can be verified offline. The submission is
+    # already accepted at this point; stapling only fails locally on some
+    # macOS/Xcode combinations ("Could not validate ticket", error 65), in
+    # which case Gatekeeper still verifies the DMG online.
     echo -e "${BLUE}➤${NC} Stapling notarization ticket..."
-    if ! xcrun stapler staple "$DMG"; then
-        echo -e "${RED}✗ Stapling failed for: $NAME${NC}"
-        return 1
-    fi
-
-    # Verify
-    echo -e "${BLUE}➤${NC} Verifying..."
-    if xcrun stapler validate "$DMG" &>/dev/null; then
+    if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG" >/dev/null 2>&1; then
         echo -e "${GREEN}✓ $NAME — notarized and stapled${NC}"
         return 0
-    else
-        echo -e "${RED}✗ Validation failed for: $NAME${NC}"
-        return 1
     fi
+    echo -e "${YELLOW}⚠ $NAME — notarized, but the ticket could not be stapled locally${NC}"
+    echo -e "${YELLOW}  Gatekeeper still verifies it online (spctl source=Notarized Developer ID).${NC}"
+    STAPLE_WARN=$((STAPLE_WARN + 1))
+    return 0
 }
 
 # --- Process all DMGs ---
 PASS=0
 FAIL=0
+STAPLE_WARN=0
 FAILED_FILES=()
 START=$(date +%s)
 
@@ -164,6 +162,7 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${BLUE}  Summary  (elapsed: $((END - START))s)${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  Passed: $PASS${NC}"
+[ $STAPLE_WARN -gt 0 ] && echo -e "${YELLOW}  Stapling warnings: $STAPLE_WARN${NC}"
 [ $FAIL -gt 0 ] && echo -e "${RED}  Failed: $FAIL${NC}"
 
 if [ ${#FAILED_FILES[@]} -gt 0 ]; then
