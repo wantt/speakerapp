@@ -4,7 +4,6 @@
 支持 **声纹注册**、**声纹比对**、**1:N 声纹检索** 和 **音频波形展示**。
 Windows / macOS / Linux 三平台通用，模型权重已随安装包内置，开箱即用、完全离线。
 
-![icon](src/voiceprint_studio/resources/icon.png)
 
 ## 功能
 
@@ -154,6 +153,7 @@ resources/
 <img width="2640" height="1646" alt="393f40fedefb8c50ba0b7a3a22744b45" src="https://github.com/user-attachments/assets/50332518-c253-43a2-850a-80d907a45b8c" />
 <img width="2640" height="1646" alt="60f58d904a3ef0b0a96d2b12a5c41851" src="https://github.com/user-attachments/assets/a0a9a1cf-0a1d-4ef2-9afa-6cb8fe24ee35" />
 
+![icon](src/voiceprint_studio/resources/icon.png)
 
 
 
