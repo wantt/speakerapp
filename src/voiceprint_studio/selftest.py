@@ -86,6 +86,15 @@ def run_self_test() -> int:
             print("FAIL: decoded wav too short")
             return 1
 
+        from .audio import prepare_playback
+
+        playback = prepare_playback(clip.samples, clip.sample_rate, 48000)
+        expected = round(clip.samples.shape[0] * 48000 / clip.sample_rate)
+        print(f"playback mix: {playback.shape[0]} samples @ 48 kHz (expected {expected})")
+        if abs(int(playback.shape[0]) - expected) > 48 or playback[0] != 0.0:
+            print("FAIL: playback preprocessing")
+            return 1
+
         from .audio import _ffmpeg_executable
 
         ffmpeg = _ffmpeg_executable()

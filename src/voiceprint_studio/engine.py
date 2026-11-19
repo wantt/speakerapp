@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torchaudio
 import torchaudio.compliance.kaldi as kaldi
 
 from .models.eres2netv2 import ERes2NetV2

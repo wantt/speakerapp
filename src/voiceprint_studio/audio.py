@@ -124,30 +124,156 @@ def format_duration(seconds: float) -> str:
     return f"{rest:.1f}s"
 
 
+PLAYBACK_FADE_SECONDS = 0.008
+PLAYBACK_BLOCKSIZE = 1024
+
+_sd_module = None
+
+
+def _sounddevice():
+    """Import sounddevice lazily and cache it (PortAudio may be absent)."""
+    global _sd_module
+    if _sd_module is None:
+        import sounddevice as sd
+
+        _sd_module = sd
+    return _sd_module
+
+
+def prepare_playback(samples: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
+    """Resample to the output device rate and fade the edges.
+
+    Resampling to the device's native rate avoids low-quality sample-rate
+    conversion inside the OS audio engine, and the short fades remove the
+    clicks caused by starting/ending a waveform at a non-zero amplitude.
+    """
+    data = np.asarray(samples, dtype=np.float32).ravel()
+    if data.size == 0:
+        return data
+    if dst_rate and src_rate != dst_rate:
+        from .engine import resample
+
+        data = resample(data, src_rate, dst_rate)
+    data = np.ascontiguousarray(data, dtype=np.float32)
+    fade = min(int((dst_rate or SAMPLE_RATE) * PLAYBACK_FADE_SECONDS), data.size // 2)
+    if fade > 0:
+        data = data.copy()
+        ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
+        data[:fade] *= ramp
+        data[-fade:] *= ramp[::-1]
+    return data
+
+
 class AudioPlayer:
-    """Non-blocking playback through PortAudio (sounddevice)."""
+    """Click-free, non-blocking playback through PortAudio.
+
+    A dedicated output stream is fed from a pre-faded buffer, so playback can
+    be stopped smoothly (the callback ramps the gain down before finishing)
+    instead of cutting the signal, which produced audible pops.
+    """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-
-    def play(self, clip: AudioClip) -> None:
-        import sounddevice as sd
-
-        with self._lock:
-            sd.stop()
-            sd.play(np.ascontiguousarray(clip.samples, dtype=np.float32), clip.sample_rate)
-
-    def stop(self) -> None:
-        import sounddevice as sd
-
-        sd.stop()
+        self._stream = None
+        self._sd = None
+        self._data = np.zeros(0, np.float32)
+        self._pos = 0
+        self._killing = False
+        self._finished = threading.Event()
+        self._sample_rate = SAMPLE_RATE
 
     @staticmethod
-    def is_active() -> bool:
+    def _output_sample_rate() -> int:
         try:
-            import sounddevice as sd
+            info = _sounddevice().query_devices(kind="output")
+            rate = int(round(float(info.get("default_samplerate") or SAMPLE_RATE)))
+            return max(8000, rate)
+        except Exception:
+            return SAMPLE_RATE
 
-            stream = sd.get_stream()
+    def play(self, clip: AudioClip) -> None:
+        sd = _sounddevice()
+        self.stop()
+        rate = self._output_sample_rate()
+        data = prepare_playback(clip.samples, clip.sample_rate, rate)
+        if data.size == 0:
+            return
+        with self._lock:
+            self._data = data
+            self._pos = 0
+            self._killing = False
+            self._sample_rate = rate
+            self._sd = sd
+            self._finished.clear()
+
+        stream = sd.OutputStream(
+            samplerate=rate,
+            channels=1,
+            dtype="float32",
+            blocksize=PLAYBACK_BLOCKSIZE,
+            latency="high",
+            callback=self._callback,
+            finished_callback=self._on_finished,
+        )
+        self._stream = stream
+        try:
+            stream.start()
+        except Exception:
+            self._stream = None
+            try:
+                stream.close()
+            except Exception:
+                pass
+            raise
+
+    def _callback(self, outdata, frames, time_info, status) -> None:  # noqa: ANN001
+        with self._lock:
+            data = self._data
+            pos = self._pos
+            killing = self._killing
+        outdata.fill(0)
+        if pos >= data.size:
+            raise self._sd.CallbackStop
+        n = min(frames, data.size - pos)
+        if killing:
+            # Smooth fade-out instead of an abrupt cut.
+            ramp = np.linspace(1.0, 0.0, n, endpoint=False, dtype=np.float32)
+            outdata[:n, 0] = data[pos : pos + n] * ramp
+        else:
+            outdata[:n, 0] = data[pos : pos + n]
+        with self._lock:
+            self._pos = pos + n
+        if killing or pos + n >= data.size:
+            raise self._sd.CallbackStop
+
+    def _on_finished(self) -> None:
+        self._finished.set()
+
+    def stop(self) -> None:
+        stream = self._stream
+        if stream is None:
+            return
+        with self._lock:
+            self._killing = True
+        try:
+            if stream.active:
+                # Give the callback time to play its fade-out block.
+                self._finished.wait(0.08)
+            stream.stop()
+        except Exception:
+            pass
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+            self._stream = None
+
+    def is_active(self) -> bool:
+        stream = self._stream
+        if stream is None:
+            return False
+        try:
             return bool(stream.active)
         except Exception:
             return False
