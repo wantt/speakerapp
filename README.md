@@ -150,6 +150,13 @@ resources/
 ├── pretrained_eres2netv2.ckpt   # 68 MB，随安装包分发
 └── configuration.json
 ```
+<img width="2640" height="1646" alt="74c62099728f5b41603a1bc0f062747a" src="https://github.com/user-attachments/assets/6b3619ae-b05c-4d4c-8d5e-25fd71d13aac" />
+<img width="2640" height="1646" alt="393f40fedefb8c50ba0b7a3a22744b45" src="https://github.com/user-attachments/assets/50332518-c253-43a2-850a-80d907a45b8c" />
+<img width="2640" height="1646" alt="60f58d904a3ef0b0a96d2b12a5c41851" src="https://github.com/user-attachments/assets/a0a9a1cf-0a1d-4ef2-9afa-6cb8fe24ee35" />
+
+
+
+
 
 - 推理使用 CPU（Apple Silicon 上 PyTorch 自动使用加速后端），单段音频嵌入通常 < 1 秒。
 - 相似度判定：余弦相似度 ≥ 阈值视为同一说话人；ERes2NetV2 官方推荐阈值 `0.365`。
