@@ -27,7 +27,11 @@ DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
 MACHINE="$(uname -m)"
 DMG="$DIST/VoiceprintStudio-$VERSION-$MACHINE.dmg"
-CODESIGN_ID="${CODESIGN_ID:--}"
+if [[ -z "${CODESIGN_ID:-}" ]]; then
+  CODESIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)"
+  [[ -z "$CODESIGN_ID" ]] && CODESIGN_ID="-"
+fi
 
 BUILD=1
 for arg in "$@"; do
@@ -65,6 +69,7 @@ if [[ "$CODESIGN_ID" == "-" ]]; then
   codesign --force --deep --sign - "$APP"
 else
   codesign --force --deep --sign "$CODESIGN_ID" \
+    --timestamp \
     --options runtime \
     --entitlements packaging/macos/entitlements.plist \
     "$APP"
@@ -85,12 +90,19 @@ hdiutil create \
   "$DMG"
 hdiutil verify "$DMG"
 
-if [[ -n "${APPLE_ID:-}" && -n "${APPLE_TEAM_ID:-}" && -n "${APPLE_APP_PASSWORD:-}" ]]; then
+if [[ "$CODESIGN_ID" != "-" ]]; then
+  echo "==> signing DMG"
+  codesign --force --sign "$CODESIGN_ID" --timestamp "$DMG"
+  codesign --verify --verbose=2 "$DMG"
+fi
+
+NOTARY_PASSWORD="${APPLE_APP_PASSWORD:-${APPLE_APP_SPECIFIC_PASSWORD:-}}"
+if [[ -n "${APPLE_ID:-}" && -n "${APPLE_TEAM_ID:-}" && -n "$NOTARY_PASSWORD" ]]; then
   echo "==> notarizing (this can take a few minutes)"
   xcrun notarytool submit "$DMG" \
     --apple-id "$APPLE_ID" \
     --team-id "$APPLE_TEAM_ID" \
-    --password "$APPLE_APP_PASSWORD" \
+    --password "$NOTARY_PASSWORD" \
     --wait
   xcrun stapler staple "$DMG"
 fi

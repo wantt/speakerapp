@@ -30,7 +30,8 @@ Windows / macOS / Linux 三平台通用，模型权重已随安装包内置，�
 | Debian / Ubuntu | `VoiceprintStudio-1.0.0-amd64.deb` | `sudo apt install ./VoiceprintStudio-1.0.0-amd64.deb` |
 | 通用 Linux | `VoiceprintStudio-1.0.0-x86_64.AppImage` | `chmod +x` 后直接运行 |
 
-> 安装包未做代码签名/公证。macOS 首次打开如提示「无法验证开发者」，可执行
+> macOS 版本已使用 Developer ID 签名；若尚未完成 Apple 公证，首次打开如提示
+> 「无法验证开发者」，可执行
 > `xattr -dr com.apple.quarantine "/Applications/Voiceprint Studio.app"`，
 > 或右键 →「打开」。Windows SmartScreen 提示时选择「更多信息 → 仍要运行」。
 >
@@ -91,8 +92,11 @@ PortAudio、libsndfile、FFmpeg）会被打进 one-dir 产物。
 pip install -r requirements-dev.txt
 python scripts/make_icons.py        # 重新生成 icon.png / icon.ico / icon.icns
 
-# macOS：.app + DMG（可选 Apple 公证，设置 APPLE_ID/APPLE_TEAM_ID/APPLE_APP_PASSWORD）
+# macOS：Developer ID 签名 + .app + DMG
 packaging/macos/build_dmg.sh
+
+# macOS 公证（需先按 .env.example 配置 Apple 凭据）
+./notarize-dmg.sh dist
 
 # Windows：需安装 Inno Setup 6，生成 Setup.exe
 powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
@@ -103,6 +107,28 @@ packaging/linux/build_packages.sh
 
 > Windows / Linux 打包前请安装 **CPU 版 PyTorch**，否则安装包会额外携带 CUDA 运行库：
 > `pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu`
+
+### macOS 签名与公证
+
+`build_dmg.sh` 会自动查找钥匙串中的 **Developer ID Application** 证书，对 `.app`
+启用 Hardened Runtime（含 `allow-jit` / `allow-unsigned-executable-memory` /
+`disable-library-validation` 权限）并加时间戳签名，然后签名 DMG。没有证书时回退为
+ad-hoc 签名。
+
+公证凭据放在仓库根目录的 `.env`（已 git 忽略，模板见 `.env.example`）：
+
+```bash
+APPLE_ID=your@email.com
+APPLE_TEAM_ID=XXXXXXXXXX
+APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
+```
+
+然后运行 `./notarize-dmg.sh dist`：脚本会对每个 DMG 重新签名、提交 Apple Notary
+Service、等待结果并装订（staple）票据，最后用 `stapler validate` 校验。
+
+若提交返回 `HTTP 403: A required agreement is missing or has expired`，需由团队
+管理员登录 [Apple Developer 账户](https://developer.apple.com/account) →
+Agreements 页面签署/续签最新协议后重新运行脚本。
 
 三平台产物可由 GitHub Actions 构建（`.github/workflows/build.yml`）：
 推送 `v*` 标签或手动触发 `workflow_dispatch`，矩阵覆盖 macOS arm64 / Intel、
