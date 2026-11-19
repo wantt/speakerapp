@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=声纹工坊
+Name[en]=Voiceprint Studio
+GenericName=Speaker Verification
+GenericName[zh_CN]=声纹识别
+Comment=声纹注册、比对与 1:N 检索
+Comment[en]=Voiceprint enrollment, comparison and 1:N search
+Exec=voiceprint-studio %f
+Icon=voiceprint-studio
+Terminal=false
+Categories=AudioVideo;Audio;Utility;Qt;
+StartupWMClass=VoiceprintStudio
+Keywords=voiceprint;speaker;biometrics;声纹;
+MimeType=audio/wav;audio/x-wav;audio/flac;audio/mpeg;audio/ogg;
